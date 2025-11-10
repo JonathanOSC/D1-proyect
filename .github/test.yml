@@ -1,0 +1,63 @@
+name: CI - Sistema de Inventarios D1
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    name: Build, Static Analysis & Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn -B clean compile
+
+      - name: Run static analysis (SpotBugs + Checkstyle)
+        run: |
+          mvn spotbugs:check checkstyle:check -DskipTests=true
+
+      - name: Run unit tests (JUnit + Mockito)
+        run: mvn -B test
+
+      - name: Publish test report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: target/surefire-reports/
+
+  quality-gate:
+    name: Quality Gate (SonarCloud opcional)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: ${{ success() }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # Si tienes SonarCloud configurado:
+      - name: SonarCloud Scan (opcional)
+        if: ${{ env.SONAR_TOKEN != '' }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: mvn sonar:sonar -Dsonar.projectKey=tu-proyecto -Dsonar.organization=tu-org
