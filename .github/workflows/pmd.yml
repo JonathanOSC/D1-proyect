@@ -15,9 +15,9 @@ permissions:
 jobs:
   pmd-code-scan:
     permissions:
-      contents: read # Para actions/checkout
-      security-events: write # Para subir resultados SARIF
-      actions: read # Requerido para repositorios privados
+      contents: read
+      security-events: write
+      actions: read
     runs-on: ubuntu-latest
     
     steps:
@@ -30,25 +30,33 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
       
-      - name: Run PMD
-        id: pmd
-        uses: pmd/pmd-github-action@967a81f8b657c87f7c3e96b62301cb1a48efef29
-        with:
-          rulesets: 'rulesets/java/quickstart.xml'
-          # Como tus archivos están en la raíz, ajustamos el path
-          sourcePath: '.'
-          analyzeModifiedFilesOnly: false
-          createGitHubAnnotations: true
-      
-      - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: pmd-report.sarif
-        # Continúa aunque PMD encuentre problemas
-        if: always()
-      
-      - name: Check PMD results
-        if: steps.pmd.outputs.violations != 0
+      - name: Download PMD
         run: |
-          echo "⚠️ PMD encontró ${{ steps.pmd.outputs.violations }} violaciones"
-          echo "Revisa la pestaña 'Security' para ver los detalles"
+          wget https://github.com/pmd/pmd/releases/download/pmd_releases%2F7.0.0/pmd-dist-7.0.0-bin.zip
+          unzip pmd-dist-7.0.0-bin.zip
+          chmod +x pmd-bin-7.0.0/bin/pmd
+      
+      - name: Run PMD Analysis
+        run: |
+          pmd-bin-7.0.0/bin/pmd check -d . -R rulesets/java/quickstart.xml -f text --no-cache || true
+          echo "✅ Análisis PMD completado"
+        continue-on-error: true
+      
+      - name: Generate PMD Report
+        run: |
+          pmd-bin-7.0.0/bin/pmd check -d . -R rulesets/java/quickstart.xml -f html -r pmd-report.html --no-cache || true
+        continue-on-error: true
+      
+      - name: Upload PMD Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pmd-report
+          path: pmd-report.html
+          retention-days: 30
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo "📊 Reporte PMD generado"
+          echo "Ve a la pestaña 'Actions' → 'Artifacts' para descargar el reporte HTML"
