@@ -1,0 +1,54 @@
+name: PMD Code Analysis
+
+on:
+  push:
+    branches: [ "main", "master", "develop" ]
+  pull_request:
+    branches: [ "main", "master", "develop" ]
+  schedule:
+    # Ejecuta cada viernes a las 6:24 PM UTC
+    - cron: '24 18 * * 5'
+
+permissions:
+  contents: read
+
+jobs:
+  pmd-code-scan:
+    permissions:
+      contents: read # Para actions/checkout
+      security-events: write # Para subir resultados SARIF
+      actions: read # Requerido para repositorios privados
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Run PMD
+        id: pmd
+        uses: pmd/pmd-github-action@967a81f8b657c87f7c3e96b62301cb1a48efef29
+        with:
+          rulesets: 'rulesets/java/quickstart.xml'
+          # Como tus archivos están en la raíz, ajustamos el path
+          sourcePath: '.'
+          analyzeModifiedFilesOnly: false
+          createGitHubAnnotations: true
+      
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: pmd-report.sarif
+        # Continúa aunque PMD encuentre problemas
+        if: always()
+      
+      - name: Check PMD results
+        if: steps.pmd.outputs.violations != 0
+        run: |
+          echo "⚠️ PMD encontró ${{ steps.pmd.outputs.violations }} violaciones"
+          echo "Revisa la pestaña 'Security' para ver los detalles"
